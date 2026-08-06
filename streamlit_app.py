@@ -53,16 +53,16 @@ c3.metric("Refunded", money(s1["total_refunded"]))
 c4.metric("Net Spend", money(s1["net_spend"]))
 
 c5, c6, c7, c8 = st.columns(4)
-c5.metric("Total Potential Revenue (Signed Contracts)", money(s1["total_revenue"]),
+c5.metric("Total Potential Revenue (Possible Post-Contract, Not Guaranteed)", money(s1["total_revenue"]),
           help="Sum of Final Contract Amount for signed contracts — not guaranteed until payment is actually collected.")
-c6.metric("Return on Investment (ROI) — Net Spend", f"{s1['roi_net']:.1f}%" if s1["roi_net"] is not None else "N/A",
-          help="(Revenue − Spend) / Spend × 100" + (f" · Gross-spend ROI: {s1['roi_gross']:.1f}%" if s1["roi_gross"] is not None else ""))
+c6.metric("Return on Investment (ROI): [(Revenue - Spend) / Spend * 100]", f"{s1['roi_net']:.1f}%" if s1["roi_net"] is not None else "N/A",
+          help="Based on Net Spend" + (f" · Gross-spend ROI: {s1['roi_gross']:.1f}%" if s1["roi_gross"] is not None else ""))
 c7.metric("Cost Per Lead (CPL) — Net", money(s1["cpl_net"]) if s1["cpl_net"] is not None else "N/A",
           help="Spend / Total Leads")
-c8.metric("Cost Per Acquisition (CAC) — Net", money(s1["cac_net"]) if s1["cac_net"] is not None else "N/A",
-          help="Spend / Total Signed Contracts")
+c8.metric("Cost Per Acquisition (CAC): [Total Spend / Total Signed Contracts]", money(s1["cac_net"]) if s1["cac_net"] is not None else "N/A",
+          help="Based on Net Spend")
 
-st.metric("Average Deal Size", money(s1["avg_deal_size"]) if s1["avg_deal_size"] is not None else "N/A",
+st.metric("Average Deal Size: [Total Revenue / Total Signed Contracts]", money(s1["avg_deal_size"]) if s1["avg_deal_size"] is not None else "N/A",
           help="Total Revenue / Total Signed Contracts")
 st.caption(
     "Net Spend = Gross Spend − Approved Refunds. Approved refunds assume the full Angi Lead Cost was credited back. "
