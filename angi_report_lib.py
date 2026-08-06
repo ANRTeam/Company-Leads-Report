@@ -166,6 +166,12 @@ def build_report(df: pd.DataFrame) -> dict:
 
     visited1_count = int(df[COL["first_visit_by"]].apply(not_empty).sum())
 
+    inspected_mask = df[COL["inspection_completed"]].apply(is_yes)
+    inspected_count = int(inspected_mask.sum())
+    
+    ghosted_mask = reason_col.eq("Ghosted")
+    inspected_and_ghosted_count = int((inspected_mask & ghosted_mask).sum())
+
     engaged_reps = Counter()
     for v in df[COL["first_engaged_by"]]:
         for rep in split_reps(v):
@@ -180,12 +186,14 @@ def build_report(df: pd.DataFrame) -> dict:
         called1_count=called1_count,
         called3_count=called3_count,
         visited1_count=visited1_count,
+        inspected_count=inspected_count,
+        inspected_and_ghosted_count=inspected_and_ghosted_count,
         top_performer=top_performer,
         engaged_reps=engaged_reps.most_common(),
     )
 
     # ---------- Section 4: Field Ops & Pipeline ----------
-    inspections_completed = int(df[COL["inspection_completed"]].apply(is_yes).sum())
+    inspections_completed = int(inspected_mask.sum())
 
     visit_reps = Counter()
     for v in df[COL["first_visit_by"]]:
@@ -198,7 +206,6 @@ def build_report(df: pd.DataFrame) -> dict:
         inspections_completed=inspections_completed,
         visit_reps=visit_reps.most_common(),
         ops_sync_count=ops_sync_count,
-        has_quoted_amount_field=False,  # not present in this export
     )
 
     # ---------- Section 5: Conversions & Loss Analysis ----------
@@ -363,6 +370,8 @@ def render_html(data: dict, source_file: str, source_url=None) -> str:
     {kpi("Called at least 1 Time", s3['called1_count'])}
     {kpi("Called at least 3 Times", s3['called3_count'])}
     {kpi("Visited at least 1 Time", s3['visited1_count'])}
+    {kpi("Inspections Completed", s3['inspected_count'])}
+    {kpi("Inspected & Ghosted", s3['inspected_and_ghosted_count'])}
   </div>
   <div class="two-col" style="margin-top:16px;">
     <div>
@@ -375,9 +384,7 @@ def render_html(data: dict, source_file: str, source_url=None) -> str:
   <div class="kpi-grid">
     {kpi("Total Inspections Completed", s4['inspections_completed'])}
     {kpi("Operations Sync (Sent to JobNimbus)", s4['ops_sync_count'])}
-    {kpi("Total Quoted Value in Pipeline", "N/A")}
   </div>
-  <div class="note">"Quoted Amount" is not a column in this export, so pipeline value can't be calculated. Also note the export has "Sent to JobNimbus", not "Synced to JobNimbus"; treated as the same metric.</div>
   <table style="margin-top:12px;"><tr><th>Rep (1st Visit)</th><th>Visits</th></tr>{visit_rep_rows}</table>
 
   <h2>5. Conversions &amp; Loss Analysis</h2>
@@ -510,6 +517,8 @@ def render_pdf(data: dict, source_file: str, source_url=None) -> bytes:
         ("Called at least 1 Time", s3["called1_count"]),
         ("Called at least 3 Times", s3["called3_count"]),
         ("Visited at least 1 Time", s3["visited1_count"]),
+        ("Inspections Completed", s3["inspected_count"]),
+        ("Inspected & Ghosted", s3["inspected_and_ghosted_count"]),
     ]))
     top_name, top_n = s3["top_performer"]
     story.append(Paragraph(f"Top Performer (First Engagement): <b>{top_name or 'N/A'}</b> ({top_n})", body_style))
@@ -522,14 +531,10 @@ def render_pdf(data: dict, source_file: str, source_url=None) -> bytes:
     story.append(kv_table([
         ("Total Inspections Completed", s4["inspections_completed"]),
         ("Operations Sync (Sent to JobNimbus)", s4["ops_sync_count"]),
-        ("Total Quoted Value in Pipeline", "N/A"),
     ]))
     if s4["visit_reps"]:
         story.append(Spacer(1, 8))
         story.append(bar_table(s4["visit_reps"], s1["total_leads"]))
-    story.append(Paragraph(
-        "\u201cQuoted Amount\u201d is not a column in this export, so pipeline value can't be calculated.",
-        note_style))
 
     # ---- Section 5 ----
     story.append(Paragraph("5. Conversions &amp; Loss Analysis", h2_style))
