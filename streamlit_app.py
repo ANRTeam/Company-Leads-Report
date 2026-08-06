@@ -94,7 +94,10 @@ c4.metric("Attempted, No Answer (CNA)", s3["cna_count"])
 c5.metric("Called at least 1 Time", s3["called1_count"])
 c6.metric("Called at least 3 Times", s3["called3_count"])
 
-st.metric("Visited at least 1 Time", s3["visited1_count"])
+c7, c8, c9 = st.columns(3)
+c7.metric("Visited at least 1 Time", s3["visited1_count"])
+c8.metric("Inspections Completed", s3["inspected_count"])
+c9.metric("Inspected & Ghosted", s3["inspected_and_ghosted_count"])
 
 top_name, top_n = s3["top_performer"]
 st.subheader(f"Top Performer (First Engagement): {top_name or 'N/A'} ({top_n})")
@@ -104,10 +107,9 @@ if s3["engaged_reps"]:
 
 # ---------------------------------------------------------------- Section 4
 st.header("4. Field Operations & Pipeline Metrics")
-c1, c2, c3 = st.columns(3)
+c1, c2 = st.columns(2)
 c1.metric("Total Inspections Completed", s4["inspections_completed"])
 c2.metric("Operations Sync (Sent to JobNimbus)", s4["ops_sync_count"])
-c3.metric("Total Quoted Value in Pipeline", "N/A", help="No 'Quoted Amount' column in this export")
 
 if s4["visit_reps"]:
     st.subheader("Inspections by Rep (1st Visit)")
