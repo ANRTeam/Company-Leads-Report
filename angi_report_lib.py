@@ -273,9 +273,6 @@ def render_html(data: dict, source_file: str, source_url=None) -> str:
 
     top_perf_name, top_perf_n = s3["top_performer"]
 
-    recommendations = build_recommendations(data)
-    rec_items = "".join(f"<li>{r}</li>" for r in recommendations)
-
     if source_url:
         source_line = f'Source data: <a href="{source_url}" target="_blank">{source_file}</a>'
     else:
@@ -336,13 +333,13 @@ def render_html(data: dict, source_file: str, source_url=None) -> str:
     {kpi("Total Angi Spend (Gross)", money(s1['gross_spend']))}
     {kpi("Refunded Amount", money(s1['total_refunded']), "Approved refunds netted out below")}
     {kpi("Net Spend (after refunds)", money(s1['net_spend']))}
-    {kpi("Total Generated Revenue", money(s1['total_revenue']), f"{s1['signed_count']} signed contracts")}
-    {kpi("ROI (Net Spend)", f"{s1['roi_net']:.1f}%" if s1['roi_net'] is not None else "N/A", f"Gross-spend ROI: {s1['roi_gross']:.1f}%" if s1['roi_gross'] is not None else "")}
-    {kpi("Cost Per Lead (Net)", money(s1['cpl_net']) if s1['cpl_net'] is not None else "N/A", f"Gross CPL: {money(s1['cpl_gross'])}" if s1['cpl_gross'] is not None else "")}
-    {kpi("Cost Per Acquisition (Net)", money(s1['cac_net']) if s1['cac_net'] is not None else "N/A", f"Gross CAC: {money(s1['cac_gross'])}" if s1['cac_gross'] is not None else "")}
-    {kpi("Average Deal Size", money(s1['avg_deal_size']) if s1['avg_deal_size'] is not None else "N/A")}
+    {kpi("Total Potential Revenue (Signed Contracts)", money(s1['total_revenue']), f"Sum of Final Contract Amount for {s1['signed_count']} signed contract(s) — not guaranteed until payment is actually collected")}
+    {kpi("Return on Investment (ROI) — Net Spend", f"{s1['roi_net']:.1f}%" if s1['roi_net'] is not None else "N/A", f"(Revenue − Spend) / Spend × 100 · Gross-spend ROI: {s1['roi_gross']:.1f}%" if s1['roi_gross'] is not None else "(Revenue − Spend) / Spend × 100")}
+    {kpi("Cost Per Lead (CPL) — Net", money(s1['cpl_net']) if s1['cpl_net'] is not None else "N/A", f"Spend / Total Leads · Gross CPL: {money(s1['cpl_gross'])}" if s1['cpl_gross'] is not None else "Spend / Total Leads")}
+    {kpi("Cost Per Acquisition (CAC) — Net", money(s1['cac_net']) if s1['cac_net'] is not None else "N/A", f"Spend / Total Signed Contracts · Gross CAC: {money(s1['cac_gross'])}" if s1['cac_gross'] is not None else "Spend / Total Signed Contracts")}
+    {kpi("Average Deal Size", money(s1['avg_deal_size']) if s1['avg_deal_size'] is not None else "N/A", "Total Revenue / Total Signed Contracts")}
   </div>
-  <div class="note">Refunds are netted out of spend: <b>Net Spend = Gross Spend − Approved Refunds</b>. Both gross and net figures are shown so you can see the impact. Refund amount is assumed equal to the full "Angi Lead Cost" for any lead where Refund Status = Approved.</div>
+  <div class="note">Refunds are netted out of spend: <b>Net Spend = Gross Spend − Approved Refunds</b>. Both gross and net figures are shown so you can see the impact. Refund amount is assumed equal to the full "Angi Lead Cost" for any lead where Refund Status = Approved. "Total Potential Revenue" reflects signed contract value, not confirmed/collected payment.</div>
 
   <h2>2. Lead Quality &amp; Refund Management</h2>
   <div class="two-col">
@@ -382,7 +379,7 @@ def render_html(data: dict, source_file: str, source_url=None) -> str:
     {kpi("Operations Sync (Sent to JobNimbus)", s4['ops_sync_count'])}
     {kpi("Total Quoted Value in Pipeline", "N/A")}
   </div>
-  <div class="note">"Quoted Amount" is not a column in this export, so pipeline value can't be calculated &mdash; see recommendations below. Also note the export has "Sent to JobNimbus", not "Synced to JobNimbus"; treated as the same metric.</div>
+  <div class="note">"Quoted Amount" is not a column in this export, so pipeline value can't be calculated. Also note the export has "Sent to JobNimbus", not "Synced to JobNimbus"; treated as the same metric.</div>
   <table style="margin-top:12px;"><tr><th>Rep (1st Visit)</th><th>Visits</th></tr>{visit_rep_rows}</table>
 
   <h2>5. Conversions &amp; Loss Analysis</h2>
@@ -393,76 +390,13 @@ def render_html(data: dict, source_file: str, source_url=None) -> str:
   </div>
   <h3 style="font-size:13px;color:var(--muted);margin:20px 0 8px;">Loss Reasons Breakdown</h3>
   {loss_rows}
-  <div class="note">"Other / Unclassified" breakdown (e.g. CNA &mdash; meaning not confirmed, please clarify with your team):</div>
+  <div class="note">"Other / Unclassified" breakdown (leads with a reason not covered by the categories above):</div>
   <table><tr><th>Raw Reason</th><th>Count</th></tr>{other_detail_rows}</table>
-
-  <h2>Recommendations</h2>
-  <ul class="rec">{rec_items}</ul>
 
 </div>
 </body>
 </html>"""
     return html
-
-
-def build_recommendations(data: dict) -> list:
-    s1, s2, s3, s4, s5 = data["s1"], data["s2"], data["s3"], data["s4"], data["s5"]
-    total = data["total_leads"]
-    recs = []
-
-    if s5["loss_breakdown"].get("Other / Unclassified", 0) / total > 0.15:
-        recs.append(
-            "A meaningful share of leads still fall into 'Other / Unclassified' in the loss-reason breakdown. "
-            "Review the raw reasons listed in the table below and add any recurring ones to LOSS_REASON_GROUPS so they're categorized correctly."
-        )
-
-    cna_share = s3["cna_count"] / total if total else 0
-    if cna_share > 0.2:
-        recs.append(
-            f"'CNA' (called, no answer) is now the single largest loss reason ({s3['cna_count']} of {total} leads, {cna_share*100:.0f}%). "
-            "This is a live, contactable lead the team simply couldn't reach by phone — it's worth adding a text/SMS follow-up step or a required voicemail + retry-next-day rule before marking these lost, since they're not fake and not truly 'never contacted'."
-        )
-
-    if s4["has_quoted_amount_field"] is False:
-        recs.append(
-            "Add a 'Quoted Amount' field to the CRM export so this report can track total quoted pipeline value and quote-to-close rate, not just signed contracts."
-        )
-
-    if s1["signed_count"] and s1["total_revenue"]:
-        pass
-
-    if s1["signed_count"] < 5:
-        recs.append(
-            "Only a handful of leads in this export have a recorded Final Contract Amount / signed status. "
-            "Revenue-based metrics (ROI, CAC, Avg Deal Size) will be volatile until more leads move through the pipeline — treat them as directional, not final, until sample size grows."
-        )
-
-    call_drop = s3["called1_count"] - s3["called3_count"]
-    if s3["called1_count"] and call_drop / s3["called1_count"] > 0.5:
-        recs.append(
-            f"Call follow-through drops sharply between the 1st and 3rd attempt ({s3['called1_count']} → {s3['called3_count']}, a "
-            f"{call_drop / s3['called1_count'] * 100:.0f}% drop-off). Consider a required 3-call cadence before a lead is marked lost."
-        )
-
-    if s2["fake_pct"] not in ("N/A",) and float(s2["fake_pct"].rstrip('%')) > 15:
-        recs.append(
-            f"Fake/invalid leads are {s2['fake_pct']} of total volume — worth escalating to your Angi account rep as a lead-quality issue, "
-            "and worth tracking refund turnaround time (date requested → date approved) as its own metric."
-        )
-
-    recs.append(
-        "Track a 'Refund Requested Date' and 'Refund Approved Date' to measure average days-to-refund — useful for holding Angi accountable on SLA."
-    )
-    recs.append(
-        "Standardize rep names in the CRM (e.g. 'Harrison' vs 'Harriosn' typo, 'ANR Support Team' vs individual reps) so per-rep leaderboards are accurate."
-    )
-    recs.append(
-        "Add a lead source/channel timestamp-to-first-contact metric (Created → First Engagement Date) to measure speed-to-lead, which is one of the strongest predictors of Angi lead conversion."
-    )
-    recs.append(
-        "Consider a weekly/monthly trend view (this report is a snapshot) so you can see whether CPL, ROI, and fake-lead % are improving or worsening over time — rerun this script on each new export and compare."
-    )
-    return recs
 
 
 # =====================================================================
@@ -478,7 +412,7 @@ def render_pdf(data: dict, source_file: str, source_url=None) -> bytes:
     from reportlab.lib.units import cm
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, ListFlowable, ListItem
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
     )
 
     s1, s2, s3, s4, s5 = data["s1"], data["s2"], data["s3"], data["s4"], data["s5"]
@@ -548,15 +482,16 @@ def render_pdf(data: dict, source_file: str, source_url=None) -> bytes:
         ("Total Angi Spend (Gross)", money(s1["gross_spend"])),
         ("Refunded Amount", money(s1["total_refunded"])),
         ("Net Spend (after refunds)", money(s1["net_spend"])),
-        ("Total Generated Revenue", money(s1["total_revenue"])),
-        ("ROI (Net Spend)", f"{s1['roi_net']:.1f}%" if s1["roi_net"] is not None else "N/A"),
-        ("ROI (Gross Spend)", f"{s1['roi_gross']:.1f}%" if s1["roi_gross"] is not None else "N/A"),
-        ("Cost Per Lead (Net)", money(s1["cpl_net"]) if s1["cpl_net"] is not None else "N/A"),
-        ("Cost Per Acquisition (Net)", money(s1["cac_net"]) if s1["cac_net"] is not None else "N/A"),
-        ("Average Deal Size", money(s1["avg_deal_size"]) if s1["avg_deal_size"] is not None else "N/A"),
-    ]))
+        ("Total Potential Revenue (Signed Contracts) — not guaranteed until collected", money(s1["total_revenue"])),
+        ("Return on Investment (ROI), Net Spend — (Revenue − Spend) / Spend × 100", f"{s1['roi_net']:.1f}%" if s1["roi_net"] is not None else "N/A"),
+        ("Return on Investment (ROI), Gross Spend", f"{s1['roi_gross']:.1f}%" if s1["roi_gross"] is not None else "N/A"),
+        ("Cost Per Lead (CPL), Net — Spend / Total Leads", money(s1["cpl_net"]) if s1["cpl_net"] is not None else "N/A"),
+        ("Cost Per Acquisition (CAC), Net — Spend / Total Signed Contracts", money(s1["cac_net"]) if s1["cac_net"] is not None else "N/A"),
+        ("Average Deal Size — Total Revenue / Total Signed Contracts", money(s1["avg_deal_size"]) if s1["avg_deal_size"] is not None else "N/A"),
+    ], col_widths=(11 * cm, 4 * cm)))
     story.append(Paragraph(
-        "Net Spend = Gross Spend − Approved Refunds. Approved refunds assume the full Angi Lead Cost was credited back.",
+        "Net Spend = Gross Spend − Approved Refunds. Approved refunds assume the full Angi Lead Cost was credited back. "
+        "\u201cTotal Potential Revenue\u201d reflects signed contract value, not confirmed/collected payment.",
         note_style))
 
     # ---- Section 2 ----
@@ -608,14 +543,6 @@ def render_pdf(data: dict, source_file: str, source_url=None) -> bytes:
     ]))
     story.append(Spacer(1, 8))
     story.append(bar_table(list(s5["loss_breakdown"].items()), s1["total_leads"]))
-
-    # ---- Recommendations ----
-    story.append(Paragraph("Recommendations", h2_style))
-    recs = build_recommendations(data)
-    story.append(ListFlowable(
-        [ListItem(Paragraph(r, body_style), spaceBefore=4) for r in recs],
-        bulletType="bullet",
-    ))
 
     doc.build(story)
     return buf.getvalue()
