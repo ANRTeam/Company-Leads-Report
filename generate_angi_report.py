@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 import pandas as pd
 
-from angi_report_lib import COL, build_report, render_html
+from angi_report_lib import COL, build_report, render_html, render_pdf
 
 
 def main():
@@ -28,6 +28,7 @@ def main():
 
     input_path = Path(sys.argv[1])
     output_path = Path(sys.argv[2]) if len(sys.argv) > 2 else input_path.with_suffix(".report.html")
+    pdf_path = output_path.with_suffix(".pdf")
 
     df = pd.read_csv(input_path, encoding="utf-8-sig", dtype=str)
 
@@ -37,9 +38,12 @@ def main():
 
     data = build_report(df)
     html = render_html(data, input_path.name)
-
     output_path.write_text(html, encoding="utf-8")
-    print(f"Report written to: {output_path}")
+    print(f"HTML report written to: {output_path}")
+
+    pdf_bytes = render_pdf(data, input_path.name)
+    pdf_path.write_bytes(pdf_bytes)
+    print(f"PDF report written to: {pdf_path}")
 
 
 if __name__ == "__main__":
