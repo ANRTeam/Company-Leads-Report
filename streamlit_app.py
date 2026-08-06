@@ -12,23 +12,26 @@ Deploy on Streamlit Community Cloud pointing at this file
 import streamlit as st
 import pandas as pd
 
-from angi_report_lib import COL, build_report, render_html, money, pct
+from angi_report_lib import COL, build_report, render_html, render_pdf, money, pct
 
 st.set_page_config(page_title="Angi Leads Report", page_icon="📊", layout="wide")
 
 st.title("📊 Angi Leads Performance Report")
 st.caption("Upload your Angi Leads CRM export (CSV) to generate the report.")
 
-uploaded = st.file_uploader("Angi Leads CSV export", type=["csv"])
+uploaded = st.file_uploader("Angi Leads export (CSV or Excel)", type=["csv", "xlsx", "xls"])
 
 if uploaded is None:
-    st.info("Upload a CSV exported from your CRM (e.g. 'Export_Contacts_Angi_Leads_*.csv') to get started.")
+    st.info("Upload a CSV or Excel file exported from your CRM (e.g. 'Export_Contacts_Angi_Leads_*.csv') to get started.")
     st.stop()
 
 try:
-    df = pd.read_csv(uploaded, encoding="utf-8-sig", dtype=str)
+    if uploaded.name.lower().endswith((".xlsx", ".xls")):
+        df = pd.read_excel(uploaded, dtype=str)
+    else:
+        df = pd.read_csv(uploaded, encoding="utf-8-sig", dtype=str)
 except Exception as e:
-    st.error(f"Couldn't read this CSV: {e}")
+    st.error(f"Couldn't read this file: {e}")
     st.stop()
 
 missing = [name for name in COL.values() if name not in df.columns]
@@ -125,10 +128,42 @@ if s5["other_detail"]:
 
 # ---------------------------------------------------------------- Download
 st.header("Download")
-html = render_html(data, uploaded.name)
-st.download_button(
-    "⬇️ Download full HTML report",
-    data=html,
-    file_name="angi_report.html",
-    mime="text/html",
+st.caption(
+    "Streamlit apps don't keep a permanent public URL for an uploaded file, so instead of a broken "
+    "link, the original CSV is bundled here as its own download — it always travels with the report."
 )
+
+source_bytes = uploaded.getvalue()
+html = render_html(data, uploaded.name)
+pdf_bytes = render_pdf(data, uploaded.name)
+
+d1, d2, d3 = st.columns(3)
+with d1:
+    st.download_button(
+        "⬇️ HTML report",
+        data=html,
+        file_name="angi_report.html",
+        mime="text/html",
+        use_container_width=True,
+    )
+with d2:
+    st.download_button(
+        "⬇️ PDF report",
+        data=pdf_bytes,
+        file_name="angi_report.pdf",
+        mime="application/pdf",
+        use_container_width=True,
+    )
+with d3:
+    source_mime = (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        if uploaded.name.lower().endswith(".xlsx")
+        else "text/csv"
+    )
+    st.download_button(
+        f"⬇️ Source data ({uploaded.name})",
+        data=source_bytes,
+        file_name=uploaded.name,
+        mime=source_mime,
+        use_container_width=True,
+    )
