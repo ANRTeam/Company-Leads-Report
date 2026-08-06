@@ -316,8 +316,6 @@ def render_html(data: dict, source_file: str, source_url=None) -> str:
   th {{ color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }}
   .two-col {{ display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }}
   .note {{ background: var(--card2); border-left: 3px solid var(--accent); padding: 10px 14px; border-radius: 6px; font-size: 12.5px; color: var(--muted); margin: 10px 0; }}
-  ul.rec {{ padding-left: 20px; }}
-  ul.rec li {{ margin: 8px 0; font-size: 14px; }}
   .pos {{ color: var(--green); }} .neg {{ color: var(--red); }}
   @media (max-width: 700px) {{ .two-col {{ grid-template-columns: 1fr; }} .bar-row {{ grid-template-columns: 120px 1fr 90px; }} }}
 </style>
@@ -333,13 +331,13 @@ def render_html(data: dict, source_file: str, source_url=None) -> str:
     {kpi("Total Angi Spend (Gross)", money(s1['gross_spend']))}
     {kpi("Refunded Amount", money(s1['total_refunded']), "Approved refunds netted out below")}
     {kpi("Net Spend (after refunds)", money(s1['net_spend']))}
-    {kpi("Total Potential Revenue (Signed Contracts)", money(s1['total_revenue']), f"Sum of Final Contract Amount for {s1['signed_count']} signed contract(s) — not guaranteed until payment is actually collected")}
-    {kpi("Return on Investment (ROI) — Net Spend", f"{s1['roi_net']:.1f}%" if s1['roi_net'] is not None else "N/A", f"(Revenue − Spend) / Spend × 100 · Gross-spend ROI: {s1['roi_gross']:.1f}%" if s1['roi_gross'] is not None else "(Revenue − Spend) / Spend × 100")}
-    {kpi("Cost Per Lead (CPL) — Net", money(s1['cpl_net']) if s1['cpl_net'] is not None else "N/A", f"Spend / Total Leads · Gross CPL: {money(s1['cpl_gross'])}" if s1['cpl_gross'] is not None else "Spend / Total Leads")}
-    {kpi("Cost Per Acquisition (CAC) — Net", money(s1['cac_net']) if s1['cac_net'] is not None else "N/A", f"Spend / Total Signed Contracts · Gross CAC: {money(s1['cac_gross'])}" if s1['cac_gross'] is not None else "Spend / Total Signed Contracts")}
-    {kpi("Average Deal Size", money(s1['avg_deal_size']) if s1['avg_deal_size'] is not None else "N/A", "Total Revenue / Total Signed Contracts")}
+    {kpi("Total Estimated Revenue", money(s1['total_revenue']), f"Sum of Final Contract Amount for {s1['signed_count']} signed contract(s)")}
+    {kpi("Return on Investment (ROI): [(Revenue - Spend) / Spend * 100]", f"{s1['roi_net']:.1f}%" if s1['roi_net'] is not None else "N/A", f"Gross-spend ROI: {s1['roi_gross']:.1f}%" if s1['roi_gross'] is not None else "")}
+    {kpi("Cost Per Lead (CPL) — Net", money(s1['cpl_net']) if s1['cpl_net'] is not None else "N/A", f"Gross CPL: {money(s1['cpl_gross'])}" if s1['cpl_gross'] is not None else "Spend / Total Leads")}
+    {kpi("Cost Per Acquisition (CAC): [Total Spend / Total Signed Contracts]", money(s1['cac_net']) if s1['cac_net'] is not None else "N/A", f"Gross CAC: {money(s1['cac_gross'])}" if s1['cac_gross'] is not None else "")}
+    {kpi("Average Deal Size: [Total Revenue / Total Signed Contracts]", money(s1['avg_deal_size']) if s1['avg_deal_size'] is not None else "N/A")}
   </div>
-  <div class="note">Refunds are netted out of spend: <b>Net Spend = Gross Spend − Approved Refunds</b>. Both gross and net figures are shown so you can see the impact. Refund amount is assumed equal to the full "Angi Lead Cost" for any lead where Refund Status = Approved. "Total Potential Revenue" reflects signed contract value, not confirmed/collected payment.</div>
+  <div class="note">Refunds are netted out of spend: <b>Net Spend = Gross Spend − Approved Refunds</b>. Both gross and net figures are shown so you can see the impact. Refund amount is assumed equal to the full "Angi Lead Cost" for any lead where Refund Status = Approved. "Total Estimated Revenue" reflects signed contract value, not confirmed/collected payment.</div>
 
   <h2>2. Lead Quality &amp; Refund Management</h2>
   <div class="two-col">
@@ -482,16 +480,15 @@ def render_pdf(data: dict, source_file: str, source_url=None) -> bytes:
         ("Total Angi Spend (Gross)", money(s1["gross_spend"])),
         ("Refunded Amount", money(s1["total_refunded"])),
         ("Net Spend (after refunds)", money(s1["net_spend"])),
-        ("Total Potential Revenue (Signed Contracts) — not guaranteed until collected", money(s1["total_revenue"])),
-        ("Return on Investment (ROI), Net Spend — (Revenue − Spend) / Spend × 100", f"{s1['roi_net']:.1f}%" if s1["roi_net"] is not None else "N/A"),
-        ("Return on Investment (ROI), Gross Spend", f"{s1['roi_gross']:.1f}%" if s1["roi_gross"] is not None else "N/A"),
-        ("Cost Per Lead (CPL), Net — Spend / Total Leads", money(s1["cpl_net"]) if s1["cpl_net"] is not None else "N/A"),
-        ("Cost Per Acquisition (CAC), Net — Spend / Total Signed Contracts", money(s1["cac_net"]) if s1["cac_net"] is not None else "N/A"),
-        ("Average Deal Size — Total Revenue / Total Signed Contracts", money(s1["avg_deal_size"]) if s1["avg_deal_size"] is not None else "N/A"),
+        ("Total Estimated Revenue", money(s1["total_revenue"])),
+        ("Return on Investment (ROI): [(Revenue - Spend) / Spend * 100]", f"{s1['roi_net']:.1f}%" if s1["roi_net"] is not None else "N/A"),
+        ("Cost Per Lead (CPL), Net", money(s1["cpl_net"]) if s1["cpl_net"] is not None else "N/A"),
+        ("Cost Per Acquisition (CAC): [Total Spend / Total Signed Contracts]", money(s1["cac_net"]) if s1["cac_net"] is not None else "N/A"),
+        ("Average Deal Size: [Total Revenue / Total Signed Contracts]", money(s1["avg_deal_size"]) if s1["avg_deal_size"] is not None else "N/A"),
     ], col_widths=(11 * cm, 4 * cm)))
     story.append(Paragraph(
         "Net Spend = Gross Spend − Approved Refunds. Approved refunds assume the full Angi Lead Cost was credited back. "
-        "\u201cTotal Potential Revenue\u201d reflects signed contract value, not confirmed/collected payment.",
+        "\u201cTotal Estimated Revenue\u201d reflects signed contract value, not confirmed/collected payment.",
         note_style))
 
     # ---- Section 2 ----
