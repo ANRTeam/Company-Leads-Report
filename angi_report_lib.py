@@ -231,7 +231,7 @@ def build_report(df: pd.DataFrame) -> dict:
 # HTML rendering
 # =====================================================================
 
-def render_html(data: dict, source_file: str) -> str:
+def render_html(data: dict, source_file: str, source_url=None) -> str:
     s1, s2, s3, s4, s5 = data["s1"], data["s2"], data["s3"], data["s4"], data["s5"]
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M")
 
@@ -276,6 +276,11 @@ def render_html(data: dict, source_file: str) -> str:
     recommendations = build_recommendations(data)
     rec_items = "".join(f"<li>{r}</li>" for r in recommendations)
 
+    if source_url:
+        source_line = f'Source data: <a href="{source_url}" target="_blank">{source_file}</a>'
+    else:
+        source_line = f"Source data: {source_file}"
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -283,8 +288,8 @@ def render_html(data: dict, source_file: str) -> str:
 <title>Angi Leads Performance Report</title>
 <style>
   :root {{
-    --bg: #0f1420; --card: #161d2e; --card2: #1c2437; --text: #e8ecf5; --muted: #93a0bb;
-    --accent: #ff6b35; --accent2: #ffb35c; --green: #34d399; --red: #f87171; --line: #2a3348;
+    --bg: #ffffff; --card: #f7f8fa; --card2: #eef0f4; --text: #1a1f2c; --muted: #5b6478;
+    --accent: #ff6b35; --accent2: #c2410c; --green: #16a34a; --red: #dc2626; --line: #e2e5ec;
   }}
   * {{ box-sizing: border-box; }}
   body {{
@@ -294,6 +299,8 @@ def render_html(data: dict, source_file: str) -> str:
   .wrap {{ max-width: 980px; margin: 0 auto; }}
   h1 {{ font-size: 26px; margin: 0 0 4px; }}
   .meta {{ color: var(--muted); font-size: 13px; margin-bottom: 32px; }}
+  .meta a {{ color: var(--accent2); text-decoration: none; font-weight: 600; }}
+  .meta a:hover {{ text-decoration: underline; }}
   h2 {{
     font-size: 16px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent2);
     border-bottom: 1px solid var(--line); padding-bottom: 8px; margin: 40px 0 16px;
@@ -321,7 +328,7 @@ def render_html(data: dict, source_file: str) -> str:
 <body>
 <div class="wrap">
   <h1>Angi Leads Performance Report</h1>
-  <div class="meta">Source: {source_file} &middot; Generated {generated_at} &middot; {s1['total_leads']} leads analyzed</div>
+  <div class="meta">{source_line} &middot; Generated {generated_at} &middot; {s1['total_leads']} leads analyzed</div>
 
   <h2>1. Executive Summary &amp; Financial Overview</h2>
   <div class="kpi-grid">
@@ -456,3 +463,159 @@ def build_recommendations(data: dict) -> list:
         "Consider a weekly/monthly trend view (this report is a snapshot) so you can see whether CPL, ROI, and fake-lead % are improving or worsening over time — rerun this script on each new export and compare."
     )
     return recs
+
+
+# =====================================================================
+# PDF rendering (pure Python via reportlab — no system dependencies,
+# so it works on Streamlit Community Cloud out of the box)
+# =====================================================================
+
+def render_pdf(data: dict, source_file: str, source_url=None) -> bytes:
+    """Build a downloadable PDF version of the report. Returns raw PDF bytes."""
+    import io
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.units import cm
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, ListFlowable, ListItem
+    )
+
+    s1, s2, s3, s4, s5 = data["s1"], data["s2"], data["s3"], data["s4"], data["s5"]
+    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    ACCENT = colors.HexColor("#c2410c")
+    MUTED = colors.HexColor("#5b6478")
+    LINE = colors.HexColor("#e2e5ec")
+    CARD = colors.HexColor("#f7f8fa")
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=letter,
+        topMargin=1.8 * cm, bottomMargin=1.8 * cm, leftMargin=1.8 * cm, rightMargin=1.8 * cm,
+        title="Angi Leads Performance Report",
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("TitleX", parent=styles["Title"], textColor=colors.HexColor("#1a1f2c"), fontSize=20)
+    meta_style = ParagraphStyle("MetaX", parent=styles["Normal"], textColor=MUTED, fontSize=9, spaceAfter=14)
+    h2_style = ParagraphStyle("H2X", parent=styles["Heading2"], textColor=ACCENT, fontSize=12, spaceBefore=16, spaceAfter=8)
+    note_style = ParagraphStyle("NoteX", parent=styles["Normal"], textColor=MUTED, fontSize=8.5, spaceBefore=4, spaceAfter=10, leftIndent=6, borderColor=ACCENT, borderWidth=0)
+    body_style = ParagraphStyle("BodyX", parent=styles["Normal"], fontSize=9.5, leading=13)
+
+    story = []
+    story.append(Paragraph("Angi Leads Performance Report", title_style))
+    if source_url:
+        meta_text = f'Source data: <link href="{source_url}" color="#c2410c"><u>{source_file}</u></link> &nbsp;&middot;&nbsp; Generated {generated_at} &middot; {s1["total_leads"]} leads analyzed'
+    else:
+        meta_text = f'Source data: {source_file} &nbsp;&middot;&nbsp; Generated {generated_at} &middot; {s1["total_leads"]} leads analyzed'
+    story.append(Paragraph(meta_text, meta_style))
+
+    def kv_table(rows, col_widths=(6.5 * cm, 5.5 * cm)):
+        t = Table([[Paragraph(str(k), body_style), Paragraph(f"<b>{v}</b>", body_style)] for k, v in rows],
+                   colWidths=col_widths)
+        t.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.5, LINE),
+            ("BACKGROUND", (0, 0), (-1, -1), CARD),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ]))
+        return t
+
+    def bar_table(rows, total):
+        # rows: list of (label, count)
+        tdata = [["Category", "Count", "% of total"]]
+        for label, n in rows:
+            p = f"{(n / total * 100):.1f}%" if total else "N/A"
+            tdata.append([label, str(n), p])
+        t = Table(tdata, colWidths=(7 * cm, 2.5 * cm, 2.5 * cm))
+        t.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.5, LINE),
+            ("BACKGROUND", (0, 0), (-1, 0), ACCENT),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        return t
+
+    # ---- Section 1 ----
+    story.append(Paragraph("1. Executive Summary &amp; Financial Overview", h2_style))
+    story.append(kv_table([
+        ("Total Leads Received", s1["total_leads"]),
+        ("Total Angi Spend (Gross)", money(s1["gross_spend"])),
+        ("Refunded Amount", money(s1["total_refunded"])),
+        ("Net Spend (after refunds)", money(s1["net_spend"])),
+        ("Total Generated Revenue", money(s1["total_revenue"])),
+        ("ROI (Net Spend)", f"{s1['roi_net']:.1f}%" if s1["roi_net"] is not None else "N/A"),
+        ("ROI (Gross Spend)", f"{s1['roi_gross']:.1f}%" if s1["roi_gross"] is not None else "N/A"),
+        ("Cost Per Lead (Net)", money(s1["cpl_net"]) if s1["cpl_net"] is not None else "N/A"),
+        ("Cost Per Acquisition (Net)", money(s1["cac_net"]) if s1["cac_net"] is not None else "N/A"),
+        ("Average Deal Size", money(s1["avg_deal_size"]) if s1["avg_deal_size"] is not None else "N/A"),
+    ]))
+    story.append(Paragraph(
+        "Net Spend = Gross Spend − Approved Refunds. Approved refunds assume the full Angi Lead Cost was credited back.",
+        note_style))
+
+    # ---- Section 2 ----
+    story.append(Paragraph("2. Lead Quality &amp; Refund Management", h2_style))
+    story.append(kv_table([
+        ("Total Invalid / Fake Leads", s2["fake_count"]),
+        ("Fake Leads Percentage", s2["fake_pct"]),
+    ]))
+    story.append(Spacer(1, 8))
+    story.append(bar_table(list(s2["refund_counts"].items()), s1["total_leads"]))
+
+    # ---- Section 3 ----
+    story.append(Paragraph("3. Outreach &amp; Engagement Performance", h2_style))
+    story.append(kv_table([
+        ("Total Engaged Leads", s3["engaged_count"]),
+        ("Lead Engagement Rate", s3["engagement_rate"]),
+        ("Missed Opportunities (Never Contacted)", s3["missed_count"]),
+        ("Attempted, No Answer (CNA)", s3["cna_count"]),
+        ("Called at least 1 Time", s3["called1_count"]),
+        ("Called at least 3 Times", s3["called3_count"]),
+        ("Visited at least 1 Time", s3["visited1_count"]),
+    ]))
+    top_name, top_n = s3["top_performer"]
+    story.append(Paragraph(f"Top Performer (First Engagement): <b>{top_name or 'N/A'}</b> ({top_n})", body_style))
+    if s3["engaged_reps"]:
+        story.append(Spacer(1, 6))
+        story.append(bar_table(s3["engaged_reps"], s1["total_leads"]))
+
+    # ---- Section 4 ----
+    story.append(Paragraph("4. Field Operations &amp; Pipeline Metrics", h2_style))
+    story.append(kv_table([
+        ("Total Inspections Completed", s4["inspections_completed"]),
+        ("Operations Sync (Sent to JobNimbus)", s4["ops_sync_count"]),
+        ("Total Quoted Value in Pipeline", "N/A"),
+    ]))
+    if s4["visit_reps"]:
+        story.append(Spacer(1, 8))
+        story.append(bar_table(s4["visit_reps"], s1["total_leads"]))
+    story.append(Paragraph(
+        "\u201cQuoted Amount\u201d is not a column in this export, so pipeline value can't be calculated.",
+        note_style))
+
+    # ---- Section 5 ----
+    story.append(Paragraph("5. Conversions &amp; Loss Analysis", h2_style))
+    story.append(kv_table([
+        ("Total Signed Contracts", s5["signed_count"]),
+        ("Lead-to-Customer Conversion Rate", s5["conversion_rate"]),
+        ("Inspection-to-Close Rate", s5["insp_to_close_rate"]),
+    ]))
+    story.append(Spacer(1, 8))
+    story.append(bar_table(list(s5["loss_breakdown"].items()), s1["total_leads"]))
+
+    # ---- Recommendations ----
+    story.append(Paragraph("Recommendations", h2_style))
+    recs = build_recommendations(data)
+    story.append(ListFlowable(
+        [ListItem(Paragraph(r, body_style), spaceBefore=4) for r in recs],
+        bulletType="bullet",
+    ))
+
+    doc.build(story)
+    return buf.getvalue()
